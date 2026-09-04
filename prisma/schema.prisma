@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum TceStatus {
+  EM_ELABORACAO
+  EM_ANALISE
+  CORRECAO_NECESSARIA
+  APROVADO
+  INDEFERIDO
+  CANCELADO
+}
+
+enum DocumentType {
+  TCE_PDF
+  STUDENT_PHOTO
+}
+
+model User {
+  id               String             @id @default(cuid())
+  email            String             @unique
+  passwordHash     String
+  refreshTokenHash String?
+  active           Boolean            @default(true)
+  roles            UserRole[]
+  student          StudentProfile?
+  coordinator      CoordinatorProfile?
+  auditEvents      AuditLog[]
+  statusEvents     TceStatusHistory[]
+}
+
+model Role {
+  id    String     @id @default(cuid())
+  code  String     @unique
+  name  String
+  users UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+  @@id([userId, roleId])
+}
+
+model StudentProfile {
+  id         String @id @default(cuid())
+  userId     String @unique
+  enrollment String @unique
+  name       String
+  email      String
+  phone      String
+  photoKey   String?
+  user       User @relation(fields: [userId], references: [id])
+  tces       Tce[]
+}
+
+model CoordinatorProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  name   String
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model Company {
+  id             String @id @default(cuid())
+  name           String
+  normalizedName String @unique
+  active         Boolean @default(true)
+  tces           Tce[]
+}
+
+model Tce {
+  id              String @id @default(cuid())
+  number          String @unique
+  studentId       String
+  companyId       String
+  studentEnrollment String
+  studentName     String
+  studentEmail    String
+  studentPhone    String
+  studentPhotoKey String?
+  startDate       DateTime
+  endDate         DateTime
+  status          TceStatus @default(EM_ELABORACAO)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+  company         Company @relation(fields: [companyId], references: [id])
+  documents       TceDocument[]
+  history         TceStatusHistory[]
+  audits          AuditLog[]
+  @@index([status, createdAt])
+  @@index([studentId, createdAt])
+}
+
+model TceDocument {
+  id           String @id @default(cuid())
+  tceId        String
+  type         DocumentType @default(TCE_PDF)
+  storageKey   String
+  originalName String
+  mimeType     String
+  size         Int
+  sha256       String
+  active       Boolean @default(true)
+  uploadedById String
+  createdAt    DateTime @default(now())
+  tce          Tce @relation(fields: [tceId], references: [id], onDelete: Cascade)
+  @@index([tceId, type, active])
+}
+
+model TceStatusHistory {
+  id         String @id @default(cuid())
+  tceId      String
+  fromStatus TceStatus?
+  toStatus   TceStatus
+  reason     String?
+  actorId    String
+  createdAt  DateTime @default(now())
+  tce        Tce @relation(fields: [tceId], references: [id], onDelete: Cascade)
+  actor      User @relation(fields: [actorId], references: [id])
+  @@index([tceId, createdAt])
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  actorId   String?
+  tceId     String?
+  action    String
+  entity    String
+  entityId  String
+  ip        String?
+  metadata  String?
+  createdAt DateTime @default(now())
+  actor     User? @relation(fields: [actorId], references: [id])
+  tce       Tce? @relation(fields: [tceId], references: [id])
+  @@index([entity, entityId, createdAt])
+}
