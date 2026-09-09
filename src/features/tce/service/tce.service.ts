@@ -3,10 +3,10 @@ import { DocumentType, TceStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
-import { canEdit, canTransition, RoleCode } from '../domain/tce-policy';
-import { PrismaService } from '../infrastructure/prisma.service';
+import { PrismaService } from '../../../infrastructure/prisma.service';
+import { Actor, RoleCode } from '../model/tce.model';
+import { canEdit, canTransition } from '../model/tce-policy';
 
-export type Actor = { id: string; roles: RoleCode[]; studentId?: string };
 type FileData = { buffer: Buffer; originalname: string; mimetype: string; size: number };
 
 @Injectable()
