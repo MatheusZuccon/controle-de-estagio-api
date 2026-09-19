@@ -14,7 +14,27 @@ export class TceService {
   constructor(private db: PrismaService) {}
 
   private coordinator(actor: Actor): boolean { return actor.roles.includes('COORDINATOR'); }
+  private async ensureProfileComplete(actor: Actor): Promise<void> {
+    if (this.coordinator(actor)) return;
+    if (!actor.studentId) throw new ForbiddenException('Somente alunos podem acessar TCE.');
+    const profile = await this.db.studentProfile.findUnique({ where: { id: actor.studentId }, select: { profileCompletedAt: true } });
+    if (!profile?.profileCompletedAt) throw new ForbiddenException('Conclua o cadastro de estagiário antes de acessar o TCE.');
+  }
+  private paidInternship(value: unknown): boolean {
+    if (typeof value === 'boolean') return value;
+    const normalizedValue = typeof value === 'string' ? value.trim().toLocaleLowerCase('pt-BR') : value;
+    if (normalizedValue === 'true' || normalizedValue === 'sim') return true;
+    if (normalizedValue === 'false' || normalizedValue === 'não' || normalizedValue === 'nao') return false;
+    throw new BadRequestException('O campo "Estágio remunerado" é obrigatório e deve ser "sim" ou "não".');
+  }
+  private stipendAmount(value: unknown, isPaid: boolean): number | null {
+    if (!isPaid) return null;
+    const cents = Number(String(value ?? '').replace(/\D/g, ''));
+    if (!Number.isSafeInteger(cents) || cents <= 0) throw new BadRequestException('O valor da bolsa é obrigatório para estágio remunerado.');
+    return cents;
+  }
   private async get(id: string, actor: Actor) {
+    await this.ensureProfileComplete(actor);
     const tce = await this.db.tce.findUnique({ where: { id }, include: { company: true, documents: { where: { active: true } }, history: { include: { actor: { select: { email: true } } }, orderBy: { createdAt: 'desc' } } } });
     if (!tce) throw new NotFoundException('TCE não encontrado.');
     if ((!this.coordinator(actor) && tce.studentId !== actor.studentId) || (this.coordinator(actor) && !tce.history.some(event => event.toStatus === TceStatus.EM_ANALISE))) throw new ForbiddenException('Sem permissão para acessar este TCE.');
@@ -37,6 +57,7 @@ export class TceService {
   }
 
   async list(actor: Actor, query: any) {
+    await this.ensureProfileComplete(actor);
     const where: any = this.coordinator(actor) ? { history: { some: { toStatus: TceStatus.EM_ANALISE } } } : { studentId: actor.studentId };
     if (query.number) where.number = { contains: String(query.number) };
     if (query.status) where.status = query.status;
@@ -48,13 +69,16 @@ export class TceService {
   }
 
   async create(actor: Actor, data: any, pdf?: FileData, photo?: FileData) {
+    await this.ensureProfileComplete(actor);
     if (!actor.studentId) throw new ForbiddenException('Somente alunos podem cadastrar TCE.');
     if (!pdf || pdf.mimetype !== 'application/pdf') throw new BadRequestException('Documento PDF obrigatório.');
     if (photo && !photo.mimetype.startsWith('image/')) throw new BadRequestException('A foto deve ser uma imagem.');
+    const isPaid = this.paidInternship(data.isPaid);
+    const stipendAmount = this.stipendAmount(data.stipendAmount, isPaid);
     const company = await this.company(data.companyName);
     const document = await this.persist(pdf, DocumentType.TCE_PDF);
     const photoDocument = photo ? await this.persist(photo, DocumentType.STUDENT_PHOTO) : undefined;
-    return this.db.tce.create({ data: { number: data.number, studentId: actor.studentId, companyId: company.id, studentEnrollment: data.enrollment, studentName: data.studentName, studentEmail: data.email, studentPhone: data.phone, studentPhotoKey: photoDocument?.storageKey, startDate: new Date(data.startDate), endDate: new Date(data.endDate), documents: { create: [ { ...document, uploadedById: actor.id }, ...(photoDocument ? [{ ...photoDocument, uploadedById: actor.id }] : []) ] }, history: { create: { toStatus: TceStatus.EM_ELABORACAO, actorId: actor.id } } }, include: { company: true, documents: true } });
+    return this.db.tce.create({ data: { number: data.number, studentId: actor.studentId, companyId: company.id, studentEnrollment: data.enrollment, studentName: data.studentName, studentEmail: data.email, studentPhone: data.phone, studentPhotoKey: photoDocument?.storageKey, isPaid, stipendAmount, startDate: new Date(data.startDate), endDate: new Date(data.endDate), documents: { create: [ { ...document, uploadedById: actor.id }, ...(photoDocument ? [{ ...photoDocument, uploadedById: actor.id }] : []) ] }, history: { create: { toStatus: TceStatus.EM_ELABORACAO, actorId: actor.id } } }, include: { company: true, documents: true } });
   }
 
   async update(id: string, actor: Actor, data: any, pdf?: FileData, photo?: FileData) {
@@ -62,10 +86,12 @@ export class TceService {
     if (!actor.studentId || !canEdit(tce.status)) throw new BadRequestException('TCE não pode ser editado neste status.');
     if (pdf && pdf.mimetype !== 'application/pdf') throw new BadRequestException('Documento do TCE deve ser PDF.');
     if (photo && !photo.mimetype.startsWith('image/')) throw new BadRequestException('A foto deve ser uma imagem.');
+    const isPaid = this.paidInternship(data.isPaid);
+    const stipendAmount = this.stipendAmount(data.stipendAmount, isPaid);
     const company = await this.company(data.companyName);
     const document = pdf ? await this.persist(pdf, DocumentType.TCE_PDF) : undefined;
     const photoDocument = photo ? await this.persist(photo, DocumentType.STUDENT_PHOTO) : undefined;
-    return this.db.tce.update({ where: { id }, data: { number: data.number, companyId: company.id, studentEnrollment: data.enrollment, studentName: data.studentName, studentEmail: data.email, studentPhone: data.phone, startDate: new Date(data.startDate), endDate: new Date(data.endDate), ...(photoDocument ? { studentPhotoKey: photoDocument.storageKey } : {}), ...(document || photoDocument ? { documents: { updateMany: { where: { active: true, type: { in: [ ...(document ? [DocumentType.TCE_PDF] : []), ...(photoDocument ? [DocumentType.STUDENT_PHOTO] : []) ] } }, data: { active: false } }, create: [ ...(document ? [{ ...document, uploadedById: actor.id }] : []), ...(photoDocument ? [{ ...photoDocument, uploadedById: actor.id }] : []) ] } } : {}) }, include: { company: true, documents: { where: { active: true } } } });
+    return this.db.tce.update({ where: { id }, data: { number: data.number, companyId: company.id, studentEnrollment: data.enrollment, studentName: data.studentName, studentEmail: data.email, studentPhone: data.phone, isPaid, stipendAmount, startDate: new Date(data.startDate), endDate: new Date(data.endDate), ...(photoDocument ? { studentPhotoKey: photoDocument.storageKey } : {}), ...(document || photoDocument ? { documents: { updateMany: { where: { active: true, type: { in: [ ...(document ? [DocumentType.TCE_PDF] : []), ...(photoDocument ? [DocumentType.STUDENT_PHOTO] : []) ] } }, data: { active: false } }, create: [ ...(document ? [{ ...document, uploadedById: actor.id }] : []), ...(photoDocument ? [{ ...photoDocument, uploadedById: actor.id }] : []) ] } } : {}) }, include: { company: true, documents: { where: { active: true } } } });
   }
 
   async transition(id: string, actor: Actor, to: TceStatus, reason?: string) {

@@ -21,6 +21,15 @@ enum DocumentType {
   STUDENT_PHOTO
 }
 
+enum EducationLevel {
+  FUNDAMENTAL_INCOMPLETO
+  FUNDAMENTAL_COMPLETO
+  MEDIO_INCOMPLETO
+  MEDIO_COMPLETO
+  SUPERIOR_INCOMPLETO
+  SUPERIOR_COMPLETO
+}
+
 model User {
   id               String             @id @default(cuid())
   email            String             @unique
@@ -50,15 +59,31 @@ model UserRole {
 }
 
 model StudentProfile {
-  id         String @id @default(cuid())
-  userId     String @unique
-  enrollment String @unique
-  name       String
-  email      String
-  phone      String
-  photoKey   String?
-  user       User @relation(fields: [userId], references: [id])
-  tces       Tce[]
+  id                 String          @id @default(cuid())
+  userId             String          @unique
+  enrollment         String          @unique
+  name               String
+  email              String
+  phone              String
+  photoKey           String?
+  photoMimeType      String?
+  photoOriginalName  String?
+  socialName         String?
+  birthDate          DateTime?
+  gender             String?
+  address            String?
+  postalCode         String?
+  neighborhood       String?
+  city               String?
+  state              String?
+  course             String?
+  identity           String?
+  cpf                String?         @unique
+  academicPeriod     String?
+  educationLevel     EducationLevel?
+  profileCompletedAt DateTime?
+  user               User            @relation(fields: [userId], references: [id])
+  tces               Tce[]
 }
 
 model CoordinatorProfile {
@@ -86,6 +111,8 @@ model Tce {
   studentEmail    String
   studentPhone    String
   studentPhotoKey String?
+  isPaid          Boolean
+  stipendAmount   Int?
   startDate       DateTime
   endDate         DateTime
   status          TceStatus @default(EM_ELABORACAO)

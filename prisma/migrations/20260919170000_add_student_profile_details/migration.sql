@@ -1,0 +1,17 @@
+ALTER TABLE "StudentProfile" ADD COLUMN "photoMimeType" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "photoOriginalName" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "socialName" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "birthDate" DATETIME;
+ALTER TABLE "StudentProfile" ADD COLUMN "gender" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "address" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "postalCode" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "neighborhood" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "city" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "state" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "course" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "identity" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "cpf" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "academicPeriod" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "educationLevel" TEXT;
+ALTER TABLE "StudentProfile" ADD COLUMN "profileCompletedAt" DATETIME;
+CREATE UNIQUE INDEX "StudentProfile_cpf_key" ON "StudentProfile"("cpf");

@@ -1,0 +1,1 @@
+ALTER TABLE "Tce" ADD COLUMN "stipendAmount" INTEGER;

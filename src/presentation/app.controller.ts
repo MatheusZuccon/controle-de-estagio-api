@@ -15,7 +15,7 @@ export class AuthController {
     if (!user || !(await argon2.verify(user.passwordHash, data.password))) throw new UnauthorizedException('E-mail ou senha inválidos.');
     const roles = user.roles.map(item => item.role.code);
     const accessToken = jwt.sign({ sub: user.id, roles, studentId: user.student?.id }, process.env.JWT_ACCESS_SECRET || 'dev-access-secret', { expiresIn: '15m' });
-    return { accessToken, user: { id: user.id, email: user.email, roles, studentId: user.student?.id } };
+    return { accessToken, user: { id: user.id, email: user.email, roles, studentId: user.student?.id, profileCompleted: Boolean(user.student?.profileCompletedAt) } };
   }
 }
 
