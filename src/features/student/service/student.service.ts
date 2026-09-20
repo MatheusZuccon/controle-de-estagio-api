@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { EducationLevel } from '@prisma/client';
+import { EducationLevel, InternshipType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -46,6 +46,12 @@ export class StudentService {
     };
     if (digit(9) !== Number(cpf[9]) || digit(10) !== Number(cpf[10])) throw new BadRequestException('CPF inválido.');
     return cpf;
+  }
+
+  private internshipType(value: unknown): InternshipType {
+    const type = String(value ?? '') as InternshipType;
+    if (!Object.values(InternshipType).includes(type)) throw new BadRequestException('Tipo de estágio inválido.');
+    return type;
   }
 
   private minimumAge(birthDate: Date): void {
@@ -95,7 +101,7 @@ export class StudentService {
       gender: this.optional(data.gender, 100), address: this.required(data.address, 'Endereço', 3, 200), postalCode,
       neighborhood: this.required(data.neighborhood, 'Bairro', 3, 150), city: this.required(data.city, 'Cidade', 3, 150),
       state: this.required(data.state, 'UF', 2, 2).toUpperCase(), course, identity: this.required(data.identity, 'Identidade', 1, 50),
-      cpf: this.cpf(data.cpf), academicPeriod, educationLevel, profileCompletedAt: current.profileCompletedAt || new Date(),
+      cpf: this.cpf(data.cpf), academicPeriod, educationLevel, internshipType: this.internshipType(data.internshipType), profileCompletedAt: current.profileCompletedAt || new Date(),
       ...(photo ? await this.persistPhoto(photo) : {}),
     };
     try { return this.serialize(await this.db.studentProfile.update({ where: { id: current.id }, data: values })); }

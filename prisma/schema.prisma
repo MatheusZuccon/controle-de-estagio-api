@@ -16,6 +16,12 @@ enum TceStatus {
   CANCELADO
 }
 
+enum InternshipType {
+  SUPERVISIONADO
+  VOLUNTARIO
+  OUTRO
+}
+
 enum DocumentType {
   TCE_PDF
   STUDENT_PHOTO
@@ -41,6 +47,7 @@ model User {
   coordinator      CoordinatorProfile?
   auditEvents      AuditLog[]
   statusEvents     TceStatusHistory[]
+  reportStatusEvents InternshipReportStatusHistory[]
 }
 
 model Role {
@@ -81,9 +88,11 @@ model StudentProfile {
   cpf                String?         @unique
   academicPeriod     String?
   educationLevel     EducationLevel?
+  internshipType     InternshipType @default(SUPERVISIONADO)
   profileCompletedAt DateTime?
   user               User            @relation(fields: [userId], references: [id])
   tces               Tce[]
+  internshipReports  InternshipReport[]
 }
 
 model CoordinatorProfile {
@@ -113,6 +122,7 @@ model Tce {
   studentPhotoKey String?
   isPaid          Boolean
   stipendAmount   Int?
+  internshipType  InternshipType @default(SUPERVISIONADO)
   startDate       DateTime
   endDate         DateTime
   status          TceStatus @default(EM_ELABORACAO)
@@ -123,8 +133,66 @@ model Tce {
   documents       TceDocument[]
   history         TceStatusHistory[]
   audits          AuditLog[]
+  internshipReports InternshipReport[]
   @@index([status, createdAt])
   @@index([studentId, createdAt])
+}
+
+model InternshipReport {
+  id                String          @id @default(cuid())
+  studentId         String
+  tceId             String
+  studentEnrollment String
+  studentName       String
+  studentEmail      String
+  studentPhone      String
+  internshipType    InternshipType
+  companyName       String
+  reportStartDate   DateTime
+  reportEndDate     DateTime
+  contractStartDate DateTime
+  contractEndDate   DateTime
+  deliveredAt       DateTime
+  hoursReported     Int
+  activities        String
+  status            TceStatus       @default(EM_ELABORACAO)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  student           StudentProfile  @relation(fields: [studentId], references: [id])
+  tce               Tce             @relation(fields: [tceId], references: [id])
+  documents         InternshipReportDocument[]
+  history           InternshipReportStatusHistory[]
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@index([tceId, createdAt])
+}
+
+model InternshipReportDocument {
+  id                 String          @id @default(cuid())
+  internshipReportId String
+  storageKey         String
+  originalName       String
+  mimeType           String
+  size               Int
+  sha256             String
+  active             Boolean         @default(true)
+  uploadedById       String
+  createdAt          DateTime        @default(now())
+  internshipReport   InternshipReport @relation(fields: [internshipReportId], references: [id], onDelete: Cascade)
+  @@index([internshipReportId, active])
+}
+
+model InternshipReportStatusHistory {
+  id                 String           @id @default(cuid())
+  internshipReportId String
+  fromStatus         TceStatus?
+  toStatus           TceStatus
+  reason             String?
+  actorId            String
+  createdAt          DateTime         @default(now())
+  internshipReport   InternshipReport @relation(fields: [internshipReportId], references: [id], onDelete: Cascade)
+  actor              User             @relation(fields: [actorId], references: [id])
+  @@index([internshipReportId, createdAt])
 }
 
 model TceDocument {
