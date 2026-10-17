@@ -33,7 +33,7 @@ export class InternshipReportService {
     const reportStartDate = this.date(data.reportStartDate, 'Data inicial do período relatado');
     const reportEndDate = this.date(data.reportEndDate, 'Data final do período relatado');
     const deliveredAt = this.date(data.deliveredAt, 'Data de entrega do relatório');
-    if (reportEndDate < reportStartDate) throw new BadRequestException('A data final do período relatado deve ser posterior à inicial.');
+    if (reportEndDate < reportStartDate) throw new BadRequestException('A data final do período relatado deve ser igual ou posterior à inicial.');
     const hoursValue = String(data.hoursReported ?? '');
     if (!/^\d+$/.test(hoursValue) || Number(hoursValue) < 1 || Number(hoursValue) > 10000) throw new BadRequestException('Horas relatadas deve conter somente números entre 1 e 10000.');
     const activities = String(data.activities ?? '').trim();
@@ -46,7 +46,7 @@ export class InternshipReportService {
   private async tce(tceId: unknown, profileId: string) {
     const tce = await this.db.tce.findUnique({ where: { id: String(tceId ?? '') }, include: { company: true } });
     if (!tce || tce.studentId !== profileId) throw new NotFoundException('TCE do aluno não encontrado.');
-    if (([TceStatus.CANCELADO, TceStatus.INDEFERIDO] as TceStatus[]).includes(tce.status)) throw new BadRequestException('Não é possível criar relatório para este TCE.');
+    if (tce.status !== TceStatus.APROVADO) throw new BadRequestException('Selecione um TCE aprovado para o relatório.');
     return tce;
   }
 
@@ -72,8 +72,41 @@ export class InternshipReportService {
 
   async formData(actor: Actor) {
     const profile = await this.profile(actor);
-    const tces = await this.db.tce.findMany({ where: { studentId: profile.id, status: { notIn: [TceStatus.CANCELADO, TceStatus.INDEFERIDO] } }, include: { company: true }, orderBy: { createdAt: 'desc' } });
+    const tces = await this.db.tce.findMany({ where: { studentId: profile.id, status: TceStatus.APROVADO }, include: { company: true }, orderBy: { createdAt: 'desc' } });
     return { student: { name: profile.name, enrollment: profile.enrollment, email: profile.email, phone: profile.phone, internshipType: profile.internshipType }, tces: tces.map(tce => ({ id: tce.id, number: tce.number, company: tce.company.name, internshipType: tce.internshipType, startDate: tce.startDate, endDate: tce.endDate })) };
+  }
+
+  async reportedHours(actor: Actor) {
+    const profile = await this.profile(actor);
+    const [tces, reports] = await this.db.$transaction([
+      this.db.tce.findMany({ where: { studentId: profile.id }, select: { id: true, number: true, status: true, startDate: true, endDate: true, company: { select: { name: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
+      this.db.internshipReport.findMany({ where: { studentId: profile.id, status: TceStatus.APROVADO }, select: { tceId: true, hoursReported: true, reportStartDate: true, reportEndDate: true } }),
+    ]);
+    const reportsByTce = new Map<string, typeof reports>();
+    for (const report of reports) {
+      const grouped = reportsByTce.get(report.tceId) ?? [];
+      grouped.push(report);
+      reportsByTce.set(report.tceId, grouped);
+    }
+    const day = (date: Date) => Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86400000);
+    const dateString = (value: number) => new Date(value * 86400000).toISOString().slice(0, 10);
+    return tces.map(tce => {
+      const start = day(tce.startDate), end = day(tce.endDate);
+      const tceReports = reportsByTce.get(tce.id) ?? [];
+      const hoursReported = tceReports.reduce((total, report) => total + report.hoursReported, 0);
+      const intervals = tceReports.map(report => ({ start: Math.max(start, day(report.reportStartDate)), end: Math.min(end, day(report.reportEndDate)) }))
+        .filter(interval => interval.start <= interval.end).sort((a, b) => a.start - b.start || a.end - b.end);
+      const uncoveredPeriods: { startDate: string; endDate: string }[] = [];
+      let cursor = start;
+      for (const interval of intervals) {
+        if (interval.start > cursor) uncoveredPeriods.push({ startDate: dateString(cursor), endDate: dateString(interval.start - 1) });
+        cursor = Math.max(cursor, interval.end + 1);
+      }
+      if (cursor <= end) uncoveredPeriods.push({ startDate: dateString(cursor), endDate: dateString(end) });
+      const totalDays = Math.max(0, end - start + 1);
+      const uncoveredDays = uncoveredPeriods.reduce((sum, interval) => sum + day(new Date(interval.endDate)) - day(new Date(interval.startDate)) + 1, 0);
+      return { id: tce.id, number: tce.number, status: tce.status, company: tce.company.name, hoursReported, startDate: dateString(start), endDate: dateString(end), totalDays, coveredDays: totalDays - uncoveredDays, uncoveredPeriods };
+    });
   }
 
   async list(actor: Actor, query: any) {
@@ -83,7 +116,13 @@ export class InternshipReportService {
     if (query.enrollment) where.studentEnrollment = { contains: String(query.enrollment) };
     if (query.company) where.companyName = { contains: String(query.company) };
     const page = Math.max(1, Number(query.page) || 1), pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
-    const [total, items] = await this.db.$transaction([this.db.internshipReport.count({ where }), this.db.internshipReport.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy: { createdAt: 'desc' } })]);
+    const sortFields = ['studentName', 'studentEnrollment', 'companyName', 'reportStartDate', 'deliveredAt', 'status'];
+    if (query.sortBy !== undefined && !sortFields.includes(query.sortBy)) throw new BadRequestException('Coluna de ordenação inválida.');
+    if (query.sortDirection !== undefined && !['asc', 'desc'].includes(query.sortDirection)) throw new BadRequestException('Direção de ordenação inválida.');
+    const direction: 'asc' | 'desc' = query.sortDirection || 'desc';
+    const sortBy = query.sortBy || 'createdAt';
+    const orderBy = [{ [sortBy]: direction }, ...(sortBy === 'reportStartDate' ? [{ reportEndDate: direction }] : []), { id: 'asc' as const }];
+    const [total, items] = await this.db.$transaction([this.db.internshipReport.count({ where }), this.db.internshipReport.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy })]);
     return { total, items, page, pageSize };
   }
 
@@ -117,6 +156,7 @@ export class InternshipReportService {
   async transition(id: string, actor: Actor, to: TceStatus, reason?: string) {
     const report = await this.get(id, actor);
     if (!canTransitionInternshipReport(report.status, to, actor)) throw new BadRequestException('Transição de status inválida.');
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 1000)) throw new BadRequestException('A justificativa deve ter no máximo 1000 caracteres.');
     if ((to === TceStatus.CORRECAO_NECESSARIA || to === TceStatus.INDEFERIDO) && !reason?.trim()) throw new BadRequestException('Motivo obrigatório.');
     if (to === TceStatus.EM_ANALISE && !report.documents.length) throw new BadRequestException('Gere o documento PDF antes de enviar para análise.');
     return this.db.internshipReport.update({ where: { id }, data: { status: to, history: { create: { fromStatus: report.status, toStatus: to, reason: reason?.trim(), actorId: actor.id } } } });

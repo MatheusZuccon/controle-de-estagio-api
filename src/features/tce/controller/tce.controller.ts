@@ -13,6 +13,11 @@ export class TcesController {
   @UseInterceptors(FileFieldsInterceptor([{ name: 'document', maxCount: 1 }, { name: 'photo', maxCount: 1 }]))
   create(@Req() request: Request, @Body() data: any, @UploadedFiles() files: UploadedTceFiles) { return this.service.create(actorFromRequest(request), data, files?.document?.[0], files?.photo?.[0]); }
   @Get(':id') detail(@Req() request: Request, @Param('id') id: string) { return this.service.detail(id, actorFromRequest(request)); }
+  @Get(':id/student-photo')
+  async studentPhoto(@Req() request: Request, @Param('id') id: string) {
+    const result = await this.service.studentPhoto(id, actorFromRequest(request));
+    return new StreamableFile(result.buffer, { type: result.mimeType, disposition: `inline; filename="${encodeURIComponent(result.originalName)}"` });
+  }
   @Get(':id/documents/:documentId/download')
   async download(@Req() request: Request, @Param('id') id: string, @Param('documentId') documentId: string) {
     const result = await this.service.download(id, documentId, actorFromRequest(request));

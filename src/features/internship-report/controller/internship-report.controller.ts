@@ -9,6 +9,7 @@ export class InternshipReportsController {
   constructor(private service: InternshipReportService) {}
 
   @Get('form-data') formData(@Req() request: Request) { return this.service.formData(actorFromRequest(request)); }
+  @Get('reported-hours') reportedHours(@Req() request: Request) { return this.service.reportedHours(actorFromRequest(request)); }
   @Get() list(@Req() request: Request, @Query() query: any) { return this.service.list(actorFromRequest(request), query); }
   @Post() create(@Req() request: Request, @Body() data: any) { return this.service.create(actorFromRequest(request), data); }
   @Get(':id') detail(@Req() request: Request, @Param('id') id: string) { return this.service.detail(id, actorFromRequest(request)); }
