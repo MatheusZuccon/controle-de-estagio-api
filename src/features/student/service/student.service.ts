@@ -98,7 +98,7 @@ export class StudentService {
     if (!Object.values(EducationLevel).includes(educationLevel)) throw new BadRequestException('Nível de escolaridade inválido.');
     const values = {
       name: this.required(data.name, 'Nome', 3, 150), enrollment, phone, socialName: this.optional(data.socialName, 150), birthDate,
-      gender: this.optional(data.gender, 100), address: this.required(data.address, 'Endereço', 3, 200), postalCode,
+      gender: this.required(data.gender, 'Gênero', 1, 100), address: this.required(data.address, 'Endereço', 3, 200), postalCode,
       neighborhood: this.required(data.neighborhood, 'Bairro', 3, 150), city: this.required(data.city, 'Cidade', 3, 150),
       state: this.required(data.state, 'UF', 2, 2).toUpperCase(), course, identity: this.required(data.identity, 'Identidade', 1, 50),
       cpf: this.cpf(data.cpf), academicPeriod, educationLevel, internshipType: this.internshipType(data.internshipType), profileCompletedAt: current.profileCompletedAt || new Date(),

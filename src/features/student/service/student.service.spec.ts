@@ -4,12 +4,17 @@ import { StudentService } from './student.service';
 
 const actor = { id: 'user-1', roles: ['STUDENT'] as ('STUDENT')[], studentId: 'student-1' };
 const validData = {
-  name: 'Ana Silva', enrollment: '2023100101', phone: '(24) 99999-0000', socialName: '', birthDate: '2000-01-01', gender: '',
+  name: 'Ana Silva', enrollment: '2023100101', phone: '(24) 99999-0000', socialName: '', birthDate: '2000-01-01', gender: 'Prefiro não informar', internshipType: 'SUPERVISIONADO',
   address: 'Rua das Flores, 10', postalCode: '25680-000', neighborhood: 'Centro', city: 'Petrópolis', state: 'rj',
   course: 'Tecnologia da Informação e Comunicação - TIC', identity: '1234567', cpf: '529.982.247-25', academicPeriod: '1', educationLevel: 'SUPERIOR_INCOMPLETO',
 };
 
 describe('StudentService', () => {
+  it('exige que o gênero seja selecionado', async () => {
+    const db: any = { studentProfile: { findUnique: vi.fn().mockResolvedValue({ id: 'student-1', profileCompletedAt: null }), update: vi.fn() } };
+    await expect(new StudentService(db).update(actor, { ...validData, gender: '  ' })).rejects.toThrow('Gênero');
+    expect(db.studentProfile.update).not.toHaveBeenCalled();
+  });
   it('rejeita CPF inválido', async () => {
     const db: any = { studentProfile: { findUnique: vi.fn().mockResolvedValue({ id: 'student-1', profileCompletedAt: null }) } };
     await expect(new StudentService(db).update(actor, { ...validData, cpf: '111.111.111-11' })).rejects.toBeInstanceOf(BadRequestException);
@@ -25,6 +30,7 @@ describe('StudentService', () => {
     const db: any = { studentProfile: { findUnique: vi.fn().mockResolvedValue({ id: 'student-1', profileCompletedAt: null }), update: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'student-1', ...data })) } };
     const result = await new StudentService(db).update(actor, validData);
     expect(db.studentProfile.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ cpf: '52998224725', profileCompletedAt: expect.any(Date) }) }));
+    expect(db.studentProfile.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ gender: 'Prefiro não informar' }) }));
     expect(result.profileCompleted).toBe(true);
   });
 });

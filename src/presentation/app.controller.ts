@@ -9,6 +9,13 @@ import { PrismaService } from '../infrastructure/prisma.service';
 @Controller('auth')
 export class AuthController {
   constructor(private db: PrismaService) {}
+  @Get('me')
+  async me(@Req() request: Request) {
+    const actor = actorFromRequest(request);
+    const user = await this.db.user.findUnique({ where: { id: actor.id }, select: { student: { select: { name: true, socialName: true } }, coordinator: { select: { name: true } } } });
+    if (!user) throw new UnauthorizedException('Sessão inválida ou expirada.');
+    return { name: actor.roles.includes('COORDINATOR') ? user.coordinator?.name : (user.student?.socialName || user.student?.name) };
+  }
   @Post('login')
   async login(@Body() data: any) {
     const user = await this.db.user.findUnique({ where: { email: data.email }, include: { roles: { include: { role: true } }, student: true } });

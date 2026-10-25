@@ -1,6 +1,6 @@
 # Controle de Estágio API
 
-Copie `.env.example` para `.env`, execute `npm install`, `npm run prisma:migrate -- --name init`, `npm run prisma:generate` e `npm run seed`. A API fica em `http://localhost:3000/api/v1` e o Swagger em `/api/docs`.
+Copie `.env.example` para `.env` e configure `DATABASE_URL` com a conexão PostgreSQL. Execute `npm install`, `npx prisma migrate deploy`, `npm run prisma:generate` e `npm run seed`. A API fica em `http://localhost:3000/api/v1` e o Swagger em `/api/docs`. As migrações anteriores de SQLite estão em `prisma/sqlite-migrations`; dados existentes não são copiados automaticamente para o PostgreSQL.
 
 Seeds: `coordenador@faeterj-petropolis.edu.br` e `aluno@faeterj-petropolis.edu.br`, ambos com senha `Senha@123`.
 

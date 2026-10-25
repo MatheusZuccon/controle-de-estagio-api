@@ -16,7 +16,7 @@ describe('foto do aluno', () => {
     } };
     const service = new StudentService(db);
     const actor = { id: 'user', roles: ['STUDENT'] as ('STUDENT')[], studentId: 'student' };
-    const data = { name: 'Ana Silva', enrollment: '2023100101', phone: '(24) 99999-0000', birthDate: '2000-01-01', address: 'Rua das Flores, 10', postalCode: '25680-000', neighborhood: 'Centro', city: 'Petrópolis', state: 'RJ', course: 'Tecnologia da Informação e Comunicação - TIC', identity: '1234567', cpf: '529.982.247-25', academicPeriod: '1', educationLevel: 'SUPERIOR_INCOMPLETO', internshipType: 'SUPERVISIONADO' };
+    const data = { name: 'Ana Silva', enrollment: '2023100101', phone: '(24) 99999-0000', birthDate: '2000-01-01', gender: 'Feminino', address: 'Rua das Flores, 10', postalCode: '25680-000', neighborhood: 'Centro', city: 'Petrópolis', state: 'RJ', course: 'Tecnologia da Informação e Comunicação - TIC', identity: '1234567', cpf: '529.982.247-25', academicPeriod: '1', educationLevel: 'SUPERIOR_INCOMPLETO', internshipType: 'SUPERVISIONADO' };
     const buffer = Buffer.from('conteúdo da imagem');
     try {
       const saved = await service.update(actor, data, { buffer, originalname: 'foto.png', mimetype: 'image/png', size: buffer.length });
